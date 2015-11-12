@@ -1,0 +1,1 @@
+﻿"x64.Stealth.dll" -> "x64.GlobalHook.exe"
