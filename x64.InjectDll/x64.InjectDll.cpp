@@ -53,7 +53,7 @@ BOOL Inject(DWORD pid, char *szDllName)
 	remote_thread = CreateRemoteThreadEx(hProc, NULL, 0, load_library_ptr, pRemoteBuf, NULL, NULL, NULL);
 	if (remote_thread == NULL)
 	{
-		errorLOG("CreateRemoteThreadEx()");
+		errorLOG("CreateRemoteThreadEx()"); 
 		return FALSE;
 	}
 

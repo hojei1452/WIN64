@@ -10,7 +10,6 @@
 #define WIN32_LEAN_AND_MEAN             // 거의 사용되지 않는 내용은 Windows 헤더에서 제외합니다.
 // Windows 헤더 파일:
 #include <windows.h>
-#include <winternl.h>
 
 // TODO: 프로그램에 필요한 추가 헤더는 여기에서 참조합니다.
 
@@ -76,12 +75,18 @@ typedef BOOL(WINAPI *PFCREATEPROCESSW)(
 	_Out_ LPPROCESS_INFORMATION lpProcessInformation
 	);
 
+typedef int(WINAPI *PFMESSAGEBOXW)(
+	_In_opt_ HWND hWnd,
+	_In_opt_ LPCWSTR lpText,
+	_In_opt_ LPCWSTR lpCaption,
+	_In_ UINT uType
+	);
 
 BOOL SetPrivilege(LPCTSTR lpszPrivilege, BOOL bEnablePrivilege);
 
-BOOL enable_code_hooking(LPCTSTR szDllName, LPCSTR szFuncName, PROC pfnNew);
+BOOL enable_code_hooking(LPCTSTR szDllName, LPCSTR szFuncName, PROC pfnNew, PBYTE pBakBytes);
 
-BOOL disable_code_hooking(LPCTSTR szDllName, LPCSTR szFuncName);
+BOOL disable_code_hooking(LPCTSTR szDllName, LPCSTR szFuncName, PBYTE pBakBytes);
 
 BOOL injection(HANDLE hProc, char *szDllName);
 
@@ -117,3 +122,10 @@ BOOL WINAPI MyCreateProcessW(
 	LPSTARTUPINFO lpStartupInfo,
 	LPPROCESS_INFORMATION lpProcessInformation
 	);
+//
+//int WINAPI MyMessageBoxW(
+//	HWND hWnd,
+//	LPCWSTR lpText,
+//	LPCWSTR lpCaption,
+//	UINT uType
+//	);
